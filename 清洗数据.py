@@ -322,3 +322,84 @@ rfm.to_csv(output_rfm_path, index=False, encoding='utf-8-sig')
 segment_summary.to_csv(output_summary_path, index=False, encoding='utf-8-sig')
 print(f"\n已导出：{output_rfm_path}")
 print(f"已导出：{output_summary_path}")
+
+# =========================================================
+# 14. 写入MySQL，内置CREATE TABLE IF NOT EXISTS
+# =========================================================
+try:
+    engine = create_engine(
+        f"mysql+pymysql://{db_config['user']}:{db_config['password']}"
+        f"@{db_config['host']}:{db_config['port']}/{db_config['database']}"
+        f"?charset={db_config['charset']}"
+    )
+
+    # --------------------------
+    # 建表SQL
+    # --------------------------
+    sql_create_rfm_result = text("""
+    CREATE TABLE IF NOT EXISTS rfm_result (
+        CustomerID INT PRIMARY KEY COMMENT '客户ID',
+        Recency INT NOT NULL COMMENT '最近消费天数',
+        Frequency INT NOT NULL COMMENT '消费频次',
+        Monetary DECIMAL(12,2) NOT NULL COMMENT '消费总金额',
+        R_score INT COMMENT 'R得分',
+        F_score INT COMMENT 'F得分',
+        M_score INT COMMENT 'M得分',
+        RFM_score VARCHAR(10) COMMENT 'RFM组合得分',
+        Customer_segment VARCHAR(50) COMMENT '一级客户分群',
+        Refined_segment VARCHAR(80) COMMENT '二次细分客群',
+        Marketing_strategy TEXT COMMENT '营销策略',
+        Priority VARCHAR(5) COMMENT '优先级P0/P1/P2/P3',
+        Channel VARCHAR(50) COMMENT '触达渠道',
+        VIP_flag VARCHAR(20) COMMENT '超高金额标记',
+        INDEX idx_segment(Refined_segment),
+        INDEX idx_priority(Priority)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='RFM客户分群结果';
+    """)
+
+    sql_create_summary = text("""
+    CREATE TABLE IF NOT EXISTS rfm_segment_summary (
+        Refined_segment VARCHAR(80) PRIMARY KEY COMMENT '细分客群名称',
+        客户数 INT COMMENT '该客群客户数量',
+        总金额 DECIMAL(14,2) COMMENT '客群总消费金额',
+        平均R DECIMAL(10,2) COMMENT '平均Recency',
+        平均F DECIMAL(10,2) COMMENT '平均Frequency',
+        平均M DECIMAL(12,2) COMMENT '平均Monetary',
+        客户占比 DECIMAL(6,4) COMMENT '客户数量占比',
+        金额占比 DECIMAL(6,4) COMMENT '消费金额占比'
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='RFM细分客群汇总统计';
+    """)
+
+    with engine.connect() as conn:
+        # 表不存在就创建
+        conn.execute(sql_create_rfm_result)
+        conn.execute(sql_create_summary)
+        # 每次运行清空旧数据，避免重复
+        conn.execute(text("TRUNCATE TABLE rfm_result;"))
+        conn.execute(text("TRUNCATE TABLE rfm_segment_summary;"))
+        conn.commit()
+        print("\n>>> 检查表结构完成，已清空历史数据表")
+
+    rfm.to_sql(
+        name='rfm_result',
+        con=engine,
+        if_exists='append',
+        index=False,
+        chunksize=1000
+    )
+
+    segment_summary.to_sql(
+        name='rfm_segment_summary',
+        con=engine,
+        if_exists='append',
+        index=False,
+        chunksize=1000
+    )
+
+    print("\n数据成功写入数据库：")
+    print("- ecommerce_db.rfm_result")
+    print("- ecommerce_db.rfm_segment_summary")
+
+except SQLAlchemyError as e:
+    print(f"\n数据库写入出错！检查MySQL服务、账号密码、数据库ecommerce_db是否已经创建：{str(e)}")
+    
