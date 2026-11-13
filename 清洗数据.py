@@ -191,3 +191,134 @@ rfm['Marketing_strategy'] = (
     .map(strategy_map)
     .fillna('按RFM二次细分后测试性触达')
 )
+
+# =========================================================
+# 8. 优先级字段
+# =========================================================
+priority_map = {
+    '重要价值客户': 'P0',
+    '重要保持客户': 'P0',
+    '重要挽留客户': 'P0',
+    '准重要价值/高价值待激活': 'P0',
+    '高额待挽回': 'P0',
+    '重要发展客户': 'P1',
+    '高潜发展': 'P1',
+    '高额中频待观察': 'P1',
+    '一般价值客户': 'P2',
+    '一般保持客户': 'P2',
+    '高频高近中额': 'P2',
+    '高频中额待激活': 'P2',
+    '高近中额待提升': 'P2',
+    '中频中额待观察': 'P2',
+    '高频高近低客单': 'P2',
+    '高频低客单待提升': 'P2',
+    '高近低客单待发展': 'P2',
+    '一般发展客户': 'P3',
+    '一般挽留客户': 'P3',
+    '中额低活跃': 'P3',
+    '低价值待观察': 'P3'
+}
+
+rfm['Priority'] = rfm['Refined_segment'].map(priority_map).fillna('P2')
+
+# =========================================================
+# 9. 触达渠道
+# =========================================================
+channel_map = {
+    '重要价值客户': '专属客服/企微',
+    '重要保持客户': '电话/企微/短信',
+    '重要挽留客户': '电话/短信',
+    '准重要价值/高价值待激活': '企微/电话',
+    '高额待挽回': '电话/短信',
+    '高潜发展': '短信/App Push',
+    '高额中频待观察': '短信/企微',
+    '重要发展客户': '短信/App Push',
+    '一般价值客户': 'App Push/短信',
+    '一般保持客户': '短信/邮件',
+    '一般发展客户': '短信/邮件',
+    '一般挽留客户': '邮件/短信',
+    '中额低活跃': '邮件/短信',
+    '低价值待观察': '邮件',
+    '高频高近中额': 'App Push/短信',
+    '高频中额待激活': '短信/App Push',
+    '高近中额待提升': '短信/App Push',
+    '中频中额待观察': '邮件/短信',
+    '高频高近低客单': 'App Push',
+    '高频低客单待提升': 'App Push/短信',
+    '高近低客单待发展': '短信/App Push'
+}
+
+rfm['Channel'] = rfm['Refined_segment'].map(channel_map).fillna('短信/邮件')
+
+# =========================================================
+# 10. 超高金额人工复核标记
+# =========================================================
+rfm['VIP_flag'] = np.where(
+    rfm['Monetary'] >= VIP_AMOUNT_THRESHOLD,
+    '超高金额-人工复核',
+    '普通'
+)
+# 超高金额强制P0优先级
+rfm.loc[rfm['VIP_flag'] == '超高金额-人工复核', 'Priority'] = 'P0'
+
+# =========================================================
+# 11. 数据类型处理、调整列顺序
+# =========================================================
+rfm['Monetary'] = rfm['Monetary'].round(2)
+rfm['CustomerID'] = rfm['CustomerID'].astype(int)
+
+rfm = rfm[[
+    'CustomerID', 'Recency', 'Frequency', 'Monetary',
+    'R_score', 'F_score', 'M_score', 'RFM_score',
+    'Customer_segment', 'Refined_segment',
+    'Marketing_strategy', 'Priority', 'Channel', 'VIP_flag'
+]]
+
+# =========================================================
+# 12. 输出统计
+# =========================================================
+print("\n===== 主分群统计 =====")
+print(rfm['Customer_segment'].value_counts())
+
+print("\n===== 二次细分群统计 =====")
+print(rfm['Refined_segment'].value_counts())
+
+print("\n===== 优先级统计 =====")
+print(rfm['Priority'].value_counts())
+
+segment_summary = rfm.groupby('Refined_segment').agg(
+    客户数=('CustomerID', 'count'),
+    总金额=('Monetary', 'sum'),
+    平均R=('Recency', 'mean'),
+    平均F=('Frequency', 'mean'),
+    平均M=('Monetary', 'mean')
+).reset_index()
+
+segment_summary['客户占比'] = segment_summary['客户数'] / segment_summary['客户数'].sum()
+segment_summary['金额占比'] = segment_summary['总金额'] / segment_summary['总金额'].sum()
+segment_summary = segment_summary.sort_values('总金额', ascending=False)
+
+print("\n===== 细分群汇总 =====")
+print(segment_summary.to_string(index=False))
+
+print("\n===== 超高金额客户（需人工复核） =====")
+vip_check = rfm[rfm['VIP_flag'] == '超高金额-人工复核'][
+    ['CustomerID', 'Recency', 'Frequency', 'Monetary',
+     'RFM_score', 'Refined_segment', 'Priority',
+     'Marketing_strategy', 'Channel']
+].sort_values('Monetary', ascending=False)
+print(vip_check.to_string(index=False))
+
+print("\n===== RFM结果预览前10行 =====")
+print(rfm.head(10))
+
+# =========================================================
+# 13. 导出CSV（作业备份，SpringBoot不读取csv）
+# =========================================================
+rfm.columns = rfm.columns.str.replace('\ufeff', '', regex=False)
+segment_summary.columns = segment_summary.columns.str.replace('\ufeff', '', regex=False)
+
+rfm.to_csv(output_rfm_path, index=False, encoding='utf-8-sig')
+segment_summary.to_csv(output_summary_path, index=False, encoding='utf-8-sig')
+print(f"\n已导出：{output_rfm_path}")
+print(f"已导出：{output_summary_path}")
