@@ -93,3 +93,29 @@ rfm['RFM_score'] = (
     + rfm['F_score'].astype(str)
     + rfm['M_score'].astype(str)
 )
+
+# =========================================================
+# 5. 主分群规则
+# =========================================================
+def rfm_segment(row):
+    r, f, m = row['R_score'], row['F_score'], row['M_score']
+    if r >= 4 and f >= 4 and m >= 4:
+        return '重要价值客户'
+    elif r >= 4 and f <= 2 and m >= 4:
+        return '重要发展客户'
+    elif r <= 2 and f >= 4 and m >= 4:
+        return '重要保持客户'
+    elif r <= 2 and f <= 2 and m >= 4:
+        return '重要挽留客户'
+    elif r >= 4 and f >= 4 and m <= 2:
+        return '一般价值客户'
+    elif r >= 4 and f <= 2 and m <= 2:
+        return '一般发展客户'
+    elif r <= 2 and f >= 4 and m <= 2:
+        return '一般保持客户'
+    elif r <= 2 and f <= 2 and m <= 2:
+        return '一般挽留客户'
+    else:
+        return '中间客户/待运营'
+
+rfm['Customer_segment'] = rfm.apply(rfm_segment, axis=1)
