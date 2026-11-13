@@ -66,3 +66,30 @@ rfm = df.groupby('CustomerID').agg(
 ).reset_index()
 
 print(f"客户总数量：{rfm.shape[0]}")
+
+# =========================================================
+# 4. RFM 5分制打分
+# =========================================================
+rfm['R_score'] = pd.qcut(
+    rfm['Recency'].rank(method='first'),
+    q=5,
+    labels=[5, 4, 3, 2, 1]
+).astype(int)
+
+rfm['F_score'] = pd.qcut(
+    rfm['Frequency'].rank(method='first'),
+    q=5,
+    labels=[1, 2, 3, 4, 5]
+).astype(int)
+
+rfm['M_score'] = pd.qcut(
+    rfm['Monetary'].rank(method='first'),
+    q=5,
+    labels=[1, 2, 3, 4, 5]
+).astype(int)
+
+rfm['RFM_score'] = (
+    rfm['R_score'].astype(str)
+    + rfm['F_score'].astype(str)
+    + rfm['M_score'].astype(str)
+)
