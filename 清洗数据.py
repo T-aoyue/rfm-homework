@@ -53,3 +53,16 @@ df['InvoiceDate'] = pd.to_datetime(df['InvoiceDate'])
 df['Total'] = df['Quantity'] * df['UnitPrice']
 
 print(f"清洗后有效交易行数：{df.shape[0]}")
+
+# =========================================================
+# 3. 计算 RFM 指标
+# =========================================================
+base_date = df['InvoiceDate'].max() + pd.Timedelta(days=1)
+
+rfm = df.groupby('CustomerID').agg(
+    Recency=('InvoiceDate', lambda x: (base_date - x.max()).days),
+    Frequency=('InvoiceNo', 'nunique'),
+    Monetary=('Total', 'sum')
+).reset_index()
+
+print(f"客户总数量：{rfm.shape[0]}")
